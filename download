@@ -1,7 +1,3 @@
-node_modules/
-.vercel/
-__pycache__/
-*.pyc
-*.db
-.env
-.env.local
+server
+clinic_hub.db
+__pycache__
