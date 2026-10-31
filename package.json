@@ -1,0 +1,11 @@
+{
+  "name": "electronic-health-record",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Offline-first EHR with cloud delta sync (Vercel + Neon Postgres)",
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.2.0"
+  }
+}

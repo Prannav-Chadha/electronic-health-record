@@ -234,7 +234,7 @@ class HealthStorageEngine {
 
   // --- Voice Notes (Audio Blobs) ---
 
-  async saveVoiceNote(voiceNoteId, audioBase64, durationSec = 0) {
+  async saveVoiceNote(voiceNoteId, audioBase64, durationSec = 0, createDelta = true) {
     await this.initPromise;
     const note = {
       voiceNoteId,
@@ -257,6 +257,16 @@ class HealthStorageEngine {
       } catch (e) {
         console.warn('LocalStorage audio quota exceeded');
       }
+    }
+
+    // Voice notes travel as their own delta so every device can play them back
+    if (createDelta && window.hlcService) {
+      await this.recordDelta({
+        type: 'VOICE_NOTE',
+        entityId: voiceNoteId,
+        hlc: window.hlcService.now().toString(),
+        data: note
+      });
     }
     return note;
   }
@@ -286,21 +296,60 @@ class HealthStorageEngine {
     delta.deltaId = delta.deltaId || 'DELTA-' + Date.now() + '-' + Math.random().toString(36).substring(2, 8);
     delta.acked = delta.acked || 0;
     delta.createdAt = new Date().toISOString();
+    if (!delta.nodeId && window.hlcService) delta.nodeId = window.hlcService.nodeId;
+    if (!delta.patientId && delta.data && delta.data.patientId) delta.patientId = delta.data.patientId;
 
+    let saved = delta;
     if (this.db) {
-      return new Promise((resolve) => {
+      saved = await new Promise((resolve, reject) => {
         const tx = this.db.transaction(['deltas'], 'readwrite');
         const store = tx.objectStore('deltas');
         const req = store.put(delta);
         req.onsuccess = () => resolve(delta);
-        req.onerror = () => resolve(delta);
+        req.onerror = () => reject(req.error);
       });
     } else {
       const deltas = JSON.parse(localStorage.getItem('outbox_deltas') || '[]');
       deltas.push(delta);
       localStorage.setItem('outbox_deltas', JSON.stringify(deltas));
-      return delta;
     }
+    // Lets the sync service upload soon after a local change
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('ehr:delta-recorded', { detail: { deltaId: delta.deltaId } }));
+    }
+    return saved;
+  }
+
+  /** Persistent record of remote deltas already applied here (idempotent replay across reloads) */
+  async hasDelta(deltaId) {
+    await this.initPromise;
+    if (!deltaId) return false;
+    if (this.db) {
+      return new Promise((resolve) => {
+        const req = this.db.transaction(['deltas'], 'readonly').objectStore('deltas').get(deltaId);
+        req.onsuccess = () => resolve(!!req.result);
+        req.onerror = () => resolve(false);
+      });
+    }
+    const list = JSON.parse(localStorage.getItem('outbox_deltas') || '[]');
+    return list.some(d => d.deltaId === deltaId);
+  }
+
+  async markRemoteApplied(delta) {
+    await this.initPromise;
+    // Small stub (no payload) so we remember it without duplicating data. acked=1 keeps it out of the outbox.
+    const stub = { deltaId: delta.deltaId, type: delta.type, hlc: delta.hlc || '', acked: 1, remote: true, createdAt: new Date().toISOString() };
+    if (this.db) {
+      return new Promise((resolve) => {
+        const req = this.db.transaction(['deltas'], 'readwrite').objectStore('deltas').put(stub);
+        req.onsuccess = () => resolve(true);
+        req.onerror = () => resolve(false);
+      });
+    }
+    const list = JSON.parse(localStorage.getItem('outbox_deltas') || '[]');
+    list.push(stub);
+    localStorage.setItem('outbox_deltas', JSON.stringify(list));
+    return true;
   }
 
   async getUnsyncedDeltas() {
@@ -333,6 +382,10 @@ class HealthStorageEngine {
         req.onsuccess = () => {
           if (req.result) {
             req.result.acked = 1;
+            // Audio already lives in audio_notes; no need to keep a second copy once uploaded
+            if (req.result.type === 'VOICE_NOTE' && req.result.data) {
+              req.result.data = { voiceNoteId: req.result.data.voiceNoteId, durationSec: req.result.data.durationSec };
+            }
             store.put(req.result);
           }
         };
@@ -401,6 +454,13 @@ class HealthStorageEngine {
           store.put(req.result);
         }
       };
+    }
+  }
+
+  async resolveOpenConflictsForPatient(patientId, choice = 'SUPERSEDED') {
+    const open = await this.getActiveConflicts();
+    for (const c of open) {
+      if (c.patientId === patientId) await this.resolveConflict(c.conflictId, choice);
     }
   }
 

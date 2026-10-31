@@ -151,3 +151,35 @@ Then visit: `http://localhost:8080`
    - Click `⚠️ Simulate Concurrent Conflicting Edit from Van-02`.
    - Watch the **Explicit Conflict Resolution Modal** pop up! Inspect Local vs Remote side-by-side and resolve it safely.
    - Verify that **Data-Loss Rate** remains strictly **0.00%**!
+
+---
+
+## ☁️ Multi-Device Cloud Sync (Vercel + Neon Postgres)
+
+Every device keeps working **offline** (IndexedDB). Changes are queued as deltas and, whenever a device is online, it
+**uploads** its queue to a shared cloud database and **downloads** what other devices uploaded.
+Patients, visit logs and voice notes registered on any device show up on every other device after a sync
+(automatic every 30 s, ~3 s after a save, when the connection returns, or press **Run Delta Sync**).
+
+### One-time setup
+1. **Database** – Vercel dashboard → your project → **Storage** → **Create Database** → **Neon (Postgres)** → connect it to the project.
+   This adds `DATABASE_URL` automatically. (The tables are created on first use.)
+2. **Clinic key** – Project → **Settings → Environment Variables** → add `CLINIC_SYNC_KEY` = a long secret (e.g. 20+ random characters). Apply to Production.
+3. **Redeploy** (Deployments → ⋯ → Redeploy) so the variables take effect.
+4. On **each device**: open the site → **Sync & CRDT Monitor** tab → enter the same Clinic Sync Key and a unique Device Name (e.g. `VAN-02`) → **Save & Connect**. The status line should turn green.
+
+### How merging works
+- Visit logs and voice notes are append-only → merged by set union, never lost.
+- A patient edit carries `baseHlc` (the version it was built on). If it builds on what the receiver has, it fast-forwards;
+  if two devices edited the same patient **concurrently** and disagree on diagnosis/prescription/demographics, a **conflict**
+  is raised and the doctor chooses (keep local / accept remote / combine). Nothing is silently overwritten.
+- The hub assigns each delta a sequence number; devices pull "everything after my last cursor", so an interrupted sync resumes exactly where it stopped.
+
+### API
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/sync` | Upload deltas `{deltas:[...]}` (header `x-clinic-key`) |
+| `GET /api/sync?since=<seq>` | Download deltas after a cursor |
+| `GET /api/status` | Health check (database, key configured) |
+
+> Note: the old `server/sync_server.py` is a local-only demo relay and is no longer used by the app.

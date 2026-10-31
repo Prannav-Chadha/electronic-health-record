@@ -10,6 +10,13 @@
  * - Weak-Link Delta Sync & Explicit Conflict Resolution
  */
 
+/** Escape text before putting it in innerHTML (patient data now arrives from other devices!) */
+function esc(v) {
+  return String(v === undefined || v === null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 class EHRAppController {
   constructor() {
     this.currentView = 'view-landing';
@@ -30,6 +37,8 @@ class EHRAppController {
 
     // Set up HLC and Sync services
     this.hlc = window.hlcService || new HybridLogicalClockService('CLINIC-MAIN');
+    // Every device needs its own node id, otherwise two devices look like one to the CRDT
+    this.hlc.setNodeId(this.getOrCreateNodeId());
     this.storage = window.healthStorage;
     this.crdt = new HealthCRDTEngine(this.storage, this.hlc);
     this.sync = new WeakLinkSyncService(this.storage, this.crdt, this.hlc);
@@ -49,8 +58,87 @@ class EHRAppController {
     // Refresh UI
     this.refreshStatusMetrics();
     this.renderSpreadsheetTable();
+    this.setupSyncUI();
+
+    // Live updates when other devices' changes arrive
+    window.addEventListener('ehr:sync-updated', () => {
+      this.refreshStatusMetrics();
+      this.renderSpreadsheetTable();
+      if (this.currentView === 'view-patient-detail' && this.currentPatient) {
+        this.storage.getPatient(this.currentPatient.patientId).then(p => {
+          if (p) { this.currentPatient = p; this.renderPatientLogs(p.patientId); }
+        });
+      }
+    });
+    window.addEventListener('ehr:conflict-detected', (e) => {
+      this.refreshStatusMetrics();
+      if (!this.activeConflict) this.showConflictModal(e.detail);
+    });
+
+    // Background sync: on load, every 30s, when back online, and shortly after each local save
+    this.sync.startAutoSync(30000);
 
     console.log('EHR initialized successfully in Offline-First mode.');
+  }
+
+  getOrCreateNodeId() {
+    let id = null;
+    try { id = localStorage.getItem('ehr_node_id'); } catch { /* ignore */ }
+    if (!id) {
+      id = 'DEVICE-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+      try { localStorage.setItem('ehr_node_id', id); } catch { /* ignore */ }
+    }
+    return id;
+  }
+
+  // --- Sync tab: clinic key, device name, connection test ---
+  setupSyncUI() {
+    const keyInput = document.getElementById('sync-clinic-key');
+    const nodeInput = document.getElementById('sync-node-id');
+    const saveBtn = document.getElementById('btn-save-sync-settings');
+    const testBtn = document.getElementById('btn-test-connection');
+    const reviewBtn = document.getElementById('btn-review-conflicts');
+
+    if (keyInput) keyInput.value = this.sync.getClinicKey();
+    if (nodeInput) nodeInput.value = this.hlc.nodeId;
+
+    if (saveBtn) saveBtn.addEventListener('click', async () => {
+      this.sync.setClinicKey(keyInput.value);
+      const name = (nodeInput.value || '').trim().replace(/[^A-Za-z0-9_-]/g, '').toUpperCase();
+      if (name && name !== this.hlc.nodeId) {
+        try { localStorage.setItem('ehr_node_id', name); } catch { /* ignore */ }
+        this.hlc.setNodeId(name);
+      }
+      nodeInput.value = this.hlc.nodeId;
+      await this.testConnection();
+      this.runWeakLinkSync();
+    });
+    if (testBtn) testBtn.addEventListener('click', () => this.testConnection());
+    if (reviewBtn) reviewBtn.addEventListener('click', () => this.reviewConflicts());
+    this.testConnection();
+  }
+
+  async testConnection() {
+    const el = document.getElementById('cloud-status');
+    if (!el) return;
+    el.textContent = 'Checking cloud hub...';
+    const r = await this.sync.checkConnection();
+    let msg;
+    if (!r.reachable) msg = '🔴 ' + r.message;
+    else if (!r.dbConfigured || r.db === 'missing_env') msg = '🟠 Hub is up but no database is connected (add Neon Postgres in Vercel).';
+    else if (r.db !== 'ok') msg = '🟠 Hub is up but the database returned an error: ' + (r.dbError || r.db);
+    else if (!r.keyConfigured) msg = '🟠 Hub is up but CLINIC_SYNC_KEY is not set in Vercel.';
+    else if (r.keyAccepted === true) msg = '🟢 Connected to cloud hub. Key accepted.';
+    else if (r.keyAccepted === false) msg = '🔴 Hub reachable, but this Clinic Sync Key is wrong.';
+    else msg = '🟡 Hub reachable. Enter the Clinic Sync Key and press Save & Connect.';
+    el.textContent = msg;
+  }
+
+  async reviewConflicts() {
+    const open = await this.storage.getActiveConflicts();
+    if (open.length === 0) { alert('No open conflicts.'); return; }
+    this.activeConflict = null;
+    this.showConflictModal(open[0]);
   }
 
   // --- Clock & HLC Ticker ---
@@ -261,6 +349,7 @@ class EHRAppController {
       description,
       registeredAt: new Date().toISOString(),
       updatedHlc: hlcTimestamp.toString(),
+      baseHlc: null,
       nodeId: this.hlc.nodeId,
       activeStatus: 'ACTIVE'
     };
@@ -355,7 +444,7 @@ class EHRAppController {
       if (log.voiceNoteId) {
         voiceNoteHTML = `
           <div style="display: flex; align-items: center; gap: 8px;">
-            <button class="btn-classic" style="padding: 4px 10px; font-size: 12px; background: #2e7d32; color: #fff;" onclick="window.ehrApp.playStoredVoiceNote('${log.voiceNoteId}', this)">
+            <button class="btn-classic btn-play-note" data-note-id="${esc(log.voiceNoteId)}" style="padding: 4px 10px; font-size: 12px; background: #2e7d32; color: #fff;">
               ▶ Listen Voice Note
             </button>
             <span class="badge-tag" style="background: #e8f5e9; color: #1b5e20;">Audio Stored</span>
@@ -365,38 +454,41 @@ class EHRAppController {
 
       card.innerHTML = `
         <div class="log-entry-header">
-          <strong>${logTitle}</strong>
+          <strong>${esc(logTitle)}</strong>
           <span style="font-family: var(--font-mono); font-weight: bold; color: #1b4526;">
-            📅 ${log.date || ''} &nbsp; ⏰ ${log.time || ''} &nbsp; [Node: ${log.nodeId || 'CLINIC'}]
+            📅 ${esc(log.date)} &nbsp; ⏰ ${esc(log.time)} &nbsp; [Node: ${esc(log.nodeId || 'CLINIC')}]
           </span>
         </div>
         <div class="log-entry-body">
           <div class="log-data-item">
             <strong>Disease Classification:</strong>
-            <span style="font-size: 14px; font-weight: 600; color: #b71c1c;">${log.diseaseType || 'N/A'}</span>
+            <span style="font-size: 14px; font-weight: 600; color: #b71c1c;">${esc(log.diseaseType || 'N/A')}</span>
           </div>
           <div class="log-data-item">
             <strong>Prescribed Medication & Dosage:</strong>
-            <pre style="font-family: inherit; white-space: pre-wrap; font-size: 13px; color: #1b5e20;">${log.prescription || 'N/A'}</pre>
+            <pre style="font-family: inherit; white-space: pre-wrap; font-size: 13px; color: #1b5e20;">${esc(log.prescription || 'N/A')}</pre>
           </div>
           <div class="log-data-item" style="grid-column: span 2;">
             <strong>Doctor Clinical Notes / Description:</strong>
             <div style="background: #fafbfa; border: 1px solid #e0e0e0; padding: 8px; border-radius: 3px; font-size: 13px;">
-              ${log.description || 'No description recorded'}
+              ${esc(log.description || 'No description recorded')}
             </div>
           </div>
           <div class="log-data-item" style="grid-column: span 2;">
             <strong>Doctor Voice Note:</strong>
-            <div id="player-container-${log.voiceNoteId || index}">
+            <div id="player-container-${index}">
               ${voiceNoteHTML}
             </div>
           </div>
           <div class="log-data-item" style="grid-column: span 2; font-size: 10px; color: #888; font-family: var(--font-mono);">
-            HLC: ${log.hlc || 'N/A'} | Hash: ${log.hash ? log.hash.substring(0, 16) + '...' : 'Verified'}
+            HLC: ${esc(log.hlc || 'N/A')} | Hash: ${log.hash ? esc(log.hash.substring(0, 16)) + '...' : 'Verified'}
           </div>
         </div>
       `;
 
+      card.querySelectorAll('.btn-play-note').forEach(btn => {
+        btn.addEventListener('click', () => this.playStoredVoiceNote(btn.dataset.noteId, btn));
+      });
       logsContainer.appendChild(card);
     }
   }
@@ -405,7 +497,7 @@ class EHRAppController {
   async playStoredVoiceNote(voiceNoteId, btnElement) {
     const note = await this.storage.getVoiceNote(voiceNoteId);
     if (!note || !note.audioBase64) {
-      alert('Voice note audio blob not found on this device.');
+      alert('Voice note audio is not on this device yet. Run a sync while online to download it.');
       return;
     }
 
@@ -479,6 +571,8 @@ class EHRAppController {
     // Update patient master record latest status
     this.currentPatient.diseaseType = newLog.diseaseType;
     this.currentPatient.prescription = newLog.prescription;
+    // Remember which version this edit was built on (lets other devices tell "newer" from "concurrent")
+    this.currentPatient.baseHlc = this.currentPatient.updatedHlc || null;
     this.currentPatient.updatedHlc = hlcTimestamp.toString();
     await this.storage.savePatient(this.currentPatient);
 
@@ -558,7 +652,7 @@ class EHRAppController {
 
     tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px;">Loading spreadsheet records...</td></tr>';
 
-    const patients = await this.storage.getAllPatients();
+ const patients = (await this.storage.getAllPatients()).sort((a, b) => String(a.registeredAt || '').localeCompare(String(b.registeredAt || '')));
 
     if (patients.length === 0) {
       tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #777;">Spreadsheet is empty. Click "+ New Patient" to register a patient.</td></tr>';
@@ -575,14 +669,14 @@ class EHRAppController {
 
       tr.innerHTML = `
         <td class="col-header" style="text-align: center; font-weight: bold;">${i + 1}</td>
-        <td style="font-family: var(--font-mono); font-weight: bold; color: #1b5e20;">${p.patientId}</td>
-        <td style="font-weight: 600;">${p.name}</td>
-        <td>${p.age}</td>
-        <td>${p.gender || 'N/A'}</td>
-        <td><span class="badge-tag" style="background: #e8f5e9; color: #1b5e20;">${p.diseaseType || 'General'}</span></td>
-        <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${p.prescription || 'N/A'}</td>
+        <td style="font-family: var(--font-mono); font-weight: bold; color: #1b5e20;">${esc(p.patientId)}</td>
+        <td style="font-weight: 600;">${esc(p.name)}</td>
+        <td>${esc(p.age)}</td>
+        <td>${esc(p.gender || 'N/A')}</td>
+        <td><span class="badge-tag" style="background: #e8f5e9; color: #1b5e20;">${esc(p.diseaseType || 'General')}</span></td>
+        <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${esc(p.prescription || 'N/A')}</td>
         <td style="text-align: center;"><span class="badge" style="background: #2e7d32; color: #fff; padding: 2px 7px; border-radius: 10px;">${logs.length} visits</span></td>
-        <td style="font-family: var(--font-mono); font-size: 11px;">${p.updatedHlc ? p.updatedHlc.split(':')[2] || 'LOCAL' : 'LOCAL'}</td>
+        <td style="font-family: var(--font-mono); font-size: 11px;">${esc(p.updatedHlc ? p.updatedHlc.split(':')[2] || 'LOCAL' : 'LOCAL')}</td>
       `;
 
       tbody.appendChild(tr);
@@ -595,12 +689,13 @@ class EHRAppController {
     const syncBar = document.getElementById('sync-progress-bar');
     const interruptBtn = document.getElementById('btn-interrupt-sync');
 
-    if (syncStatusEl) syncStatusEl.textContent = 'Initiating delta sync over weak link...';
+    if (syncStatusEl) syncStatusEl.textContent = 'Connecting to cloud hub...';
     if (interruptBtn) interruptBtn.style.display = 'inline-block';
 
     const res = await this.sync.triggerSync((progress) => {
       if (syncStatusEl) {
-        syncStatusEl.textContent = `Syncing chunk ${progress.currentChunk}/${progress.totalChunks} (${progress.bytesTransferred} bytes transferred)...`;
+        const what = progress.phase === 'pull' ? 'Downloading from hub' : 'Uploading to hub';
+        syncStatusEl.textContent = `${what}: step ${progress.currentChunk}/${progress.totalChunks} (${progress.bytesTransferred} bytes)...`;
       }
       if (syncBar) {
         syncBar.style.width = `${progress.percent}%`;
@@ -676,9 +771,9 @@ class EHRAppController {
     conflict.differences.forEach(diff => {
       rowsHTML += `
         <tr>
-          <td style="font-weight: bold; text-transform: uppercase;">${diff.field}</td>
-          <td class="diff-local"><strong>Local Clinic:</strong> ${diff.local || 'None'}</td>
-          <td class="diff-remote"><strong>Remote Van (${conflict.remoteHlc.split(':')[2] || 'VAN'}):</strong> ${diff.incoming || 'None'}</td>
+          <td style="font-weight: bold; text-transform: uppercase;">${esc(diff.field)}</td>
+          <td class="diff-local"><strong>This device:</strong> ${esc(diff.local || 'None')}</td>
+          <td class="diff-remote"><strong>Other device (${esc((conflict.remoteHlc || '').split(':')[2] || 'REMOTE')}):</strong> ${esc(diff.incoming || 'None')}</td>
         </tr>
       `;
     });
@@ -686,7 +781,7 @@ class EHRAppController {
     diffContainer.innerHTML = `
       <p style="margin-bottom: 10px;">
         <strong>Unsafe Automatic Merge Detected:</strong> Concurrent edits on sensitive clinical fields for 
-        <strong>${conflict.patientName} (${conflict.patientId})</strong>.
+        <strong>${esc(conflict.patientName)} (${esc(conflict.patientId)})</strong>.
       </p>
       <table class="conflict-diff-table">
         <thead>
@@ -701,7 +796,7 @@ class EHRAppController {
         </tbody>
       </table>
       <div style="font-size: 11px; font-family: var(--font-mono); color: #666; margin-top: 8px;">
-        Local HLC: ${conflict.localHlc} &nbsp;|&nbsp; Remote HLC: ${conflict.remoteHlc}
+        Local HLC: ${esc(conflict.localHlc)} &nbsp;|&nbsp; Remote HLC: ${esc(conflict.remoteHlc)}
       </div>
     `;
 
@@ -712,6 +807,11 @@ class EHRAppController {
     if (!this.activeConflict) return;
     const modal = document.getElementById('conflict-modal');
     const { patientId, localSnapshot, remoteSnapshot, conflictId } = this.activeConflict;
+
+    // The resolved record supersedes BOTH versions, so its base is the newer of the two
+    const lv = HLC.parse(localSnapshot.updatedHlc);
+    const rv = HLC.parse(remoteSnapshot.updatedHlc);
+    const supersededBase = (HLC.compare(lv, rv) >= 0 ? localSnapshot.updatedHlc : remoteSnapshot.updatedHlc);
 
     let resolvedRecord = { ...localSnapshot };
 
@@ -725,8 +825,12 @@ class EHRAppController {
       resolvedRecord.updatedHlc = this.hlc.now().toString();
     }
 
+    resolvedRecord.baseHlc = supersededBase;
     await this.storage.savePatient(resolvedRecord);
     await this.storage.resolveConflict(conflictId, choice);
+    if (this.storage.resolveOpenConflictsForPatient) {
+      await this.storage.resolveOpenConflictsForPatient(patientId, choice);
+    }
 
     modal.classList.remove('open');
     this.activeConflict = null;
@@ -747,7 +851,8 @@ class EHRAppController {
 
     console.log('Seeding demo patient record for hackathon evaluation...');
     const demoId = 'EHR-VIL-4091';
-    const demoHlc = this.hlc.now();
+    // Fixed version marker: every device seeds the identical demo record, so edits to it fast-forward cleanly across devices
+    const SEED_HLC = '0:0:SEED';
 
     const demoPatient = {
       patientId: demoId,
@@ -757,9 +862,10 @@ class EHRAppController {
       diseaseType: 'Viral Infection',
       prescription: '• Paracetamol 500mg: 1 tab TID after food for 3 days\n• ORS WHO Sachet: 1 sachet in 1L water sip freely',
       description: 'Patient presented with high grade fever (102°F), body aches, mild headache for 2 days. Hydration status normal.',
-      registeredAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-      updatedHlc: demoHlc.toString(),
-      nodeId: 'CLINIC-MAIN'
+      registeredAt: '2026-01-01T10:30:00.000Z',
+      updatedHlc: SEED_HLC,
+      baseHlc: null,
+      nodeId: 'SEED'
     };
 
     await this.storage.savePatient(demoPatient, false);
@@ -770,14 +876,14 @@ class EHRAppController {
       patientId: demoId,
       encounterNumber: 1,
       visitType: 'Initial Registration',
-      date: new Date(Date.now() - 86400000 * 2).toLocaleDateString('en-GB'),
+      date: '01/01/2026',
       time: '10:30 AM',
-      timestamp: new Date(Date.now() - 86400000 * 2).toISOString(),
+      timestamp: '2026-01-01T10:30:00.000Z',
       diseaseType: 'Viral Infection',
       prescription: '• Paracetamol 500mg: 1 tab TID for 3 days\n• ORS WHO Sachet: 1L water sip freely',
       description: 'Acute fever 102F, chills, fatigue. Prescribed symptomatic antipyretic & hydration.',
-      hlc: demoHlc.toString(),
-      nodeId: 'CLINIC-MAIN'
+      hlc: SEED_HLC,
+      nodeId: 'SEED'
     }, false);
   }
 
@@ -793,14 +899,20 @@ class EHRAppController {
     const bytesEl = document.getElementById('metric-bytes');
     if (bytesEl) bytesEl.textContent = `${metrics.totalBytesSynced} B`;
 
-    const lossEl = document.getElementById('metric-dataloss');
-    if (lossEl) lossEl.textContent = '0.00%';
+    const lastEl = document.getElementById('metric-lastsync');
+    if (lastEl) lastEl.textContent = metrics.lastSyncAt ? new Date(metrics.lastSyncAt).toLocaleTimeString() : 'never';
+
+    const pushedEl = document.getElementById('metric-pushed');
+    if (pushedEl) pushedEl.textContent = metrics.pushedTotal;
+
+    const pulledEl = document.getElementById('metric-pulled');
+    if (pulledEl) pulledEl.textContent = metrics.pulledTotal;
 
     const conflictTabBadge = document.getElementById('conflict-tab-badge');
     if (conflictTabBadge) {
       if (conflicts.length > 0) {
         conflictTabBadge.style.display = 'inline';
-        conflictTabBadge.textContent = `${conflicts.length} CONFLICT`;
+        conflictTabBadge.textContent = `${conflicts.length} CONFLICT${conflicts.length > 1 ? 'S' : ''}`;
       } else {
         conflictTabBadge.style.display = 'none';
       }
