@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Electronic Health Record</title>
+  
+  <!-- Pastel Blue Spreadsheet Stylesheet -->
+  <link rel="stylesheet" href="css/spreadsheet.css">
+
+  <!-- Offline Standalone QR Code Libraries (Stored Locally in libs/) -->
+  <script src="libs/qrcode.min.js"></script>
+  <script src="libs/jsQR.min.js"></script>
+
+  <!-- Core Distributed Systems & Clinical Modules -->
+  <script src="js/hlc.js"></script>
+  <script src="js/crypto.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/clinical_data.js"></script>
+  <script src="js/crdt.js"></script>
+  <script src="js/sync.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/qr.js"></script>
+  <script src="js/app.js"></script>
+</head>
+<body>
+
+  <!-- Full-Screen Spreadsheet Window Container -->
+  <div class="spreadsheet-window">
+    
+    <!-- Titlebar with System Controls & Link Status -->
+    <div class="spreadsheet-titlebar">
+      <h1>
+        <span>📑 Electronic Health Record</span>
+        <span class="badge-tag">SPREADSHEET LEDGER</span>
+      </h1>
+
+      <div class="top-controls">
+        <label style="font-size: 11px; font-weight: 600; text-transform: uppercase;">Link Mode:</label>
+        <select id="network-profile-select" style="font-family: var(--font-mono); font-size: 12px; padding: 3px 8px; border-radius: 3px;">
+          <option value="FAST" selected>Broadband Mode (Online)</option>
+          <option value="OFFLINE">Offline Mode (Disconnected)</option>
+        </select>
+        <span id="network-badge" class="network-badge online">Link: Online</span>
+      </div>
+    </div>
+
+    <!-- Retro Formula Bar -->
+    <div class="formula-bar-container">
+      <div id="active-cell-box" class="cell-name-box">A1:CHOICE</div>
+      <div class="formula-fx-label">fx</div>
+      <input type="text" id="formula-bar-clock" class="formula-input" readonly value="INITIALIZING LOCAL HLC CAUSAL LEDGER...">
+    </div>
+
+    <!-- Sheet Tabs Navigation (Sheets 1 to 5) -->
+    <div class="sheet-tabs-strip">
+      <div class="sheet-tab active" data-view="view-landing">
+        🏠 Sheet 1: Clinic Home
+      </div>
+      <div class="sheet-tab" data-view="view-new-patient">
+        ➕ Sheet 2: New Patient Form
+      </div>
+      <div class="sheet-tab" data-view="view-scan-qr">
+        📷 Sheet 3: Scan QR Code
+      </div>
+      <div class="sheet-tab" data-view="view-patient-detail">
+        📋 Sheet 4: Patient Records & Logs
+      </div>
+      <div class="sheet-tab" data-view="view-spreadsheet">
+        📊 Sheet 5: Spreadsheet Ledger
+      </div>
+      <div class="sheet-tab" data-view="view-sync">
+        🔄 Sync & CRDT Monitor <span id="conflict-tab-badge" class="badge" style="display: none;">1 CONFLICT</span>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- VIEW 1: LANDING PAGE (Sketch 1 Exact Match)-->
+    <!-- ========================================== -->
+    <div id="view-landing" class="view-panel active">
+      <div class="landing-canvas">
+        <div class="landing-header-banner">
+          <h2>ELECTRONIC HEALTH RECORD</h2>
+          <p>Community Health Worker & Village Clinic Offline Ledger</p>
+        </div>
+
+        <div class="sketch-action-box">
+          <!-- Button 1: New Patient -->
+          <button id="btn-landing-new" class="sketch-btn primary">
+            <span>+ NEW PATIENT</span>
+            <span class="sub-lbl">Register fresh patient, generate Unique ID & QR Card</span>
+          </button>
+
+          <!-- Divider: OR -->
+          <div class="sketch-or-divider">OR</div>
+
+          <!-- Button 2: Existing Patient (Scan QR) -->
+          <button id="btn-landing-scan" class="sketch-btn">
+            <span>📷 EXISTING PATIENT (SCAN QR)</span>
+            <span class="sub-lbl">Scan patient QR card with camera or upload image</span>
+          </button>
+        </div>
+
+        <!-- Quick Search Manual Fallback -->
+        <div class="quick-search-box">
+          <span style="font-weight: bold; font-size: 13px;">🔍 Lookup ID:</span>
+          <input type="text" id="landing-search-input" placeholder="e.g. EHR-VIL-4091 or Patient Name">
+          <button id="btn-landing-search" class="btn-classic" style="background: var(--sheet-blue-mid); color: #fff;">Open Record</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- VIEW 2: NEW PATIENT FORM (Sketch 2 Exact)  -->
+    <!-- ========================================== -->
+    <div id="view-new-patient" class="view-panel">
+      <div class="ehr-form-sheet">
+        
+        <!-- Header: Electronic Health Record with Date & Time -->
+        <div class="sheet-form-header">
+          <h2>Electronic Health Record</h2>
+          <div id="new-patient-datetime" class="datetime-stamp-box">
+            DATE: -- | TIME: --
+          </div>
+        </div>
+
+        <form id="new-patient-form">
+          <input type="hidden" id="new-patient-id-input">
+
+          <div class="grid-form-container">
+            
+            <!-- Row 1: Patient Name | Gender | Age -->
+            <div class="grid-row">
+              <div class="grid-cell flex-2">
+                <label class="cell-label" for="new-patient-name">Patient Name *</label>
+                <input type="text" id="new-patient-name" class="cell-input" placeholder="e.g. Ramesh Kumar" required>
+              </div>
+
+              <div class="grid-cell w-180">
+                <label class="cell-label" for="new-patient-gender">Gender</label>
+                <select id="new-patient-gender" class="cell-select">
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div class="grid-cell w-180">
+                <label class="cell-label" for="new-patient-age">Age (Years) *</label>
+                <input type="number" id="new-patient-age" class="cell-input" min="0" max="120" placeholder="e.g. 35" required>
+              </div>
+            </div>
+
+            <!-- Row 2: Disease Type | Medication Dropdowns -->
+            <div class="grid-row">
+              <div class="grid-cell flex-1">
+                <label class="cell-label" for="new-disease-type">
+                  Disease Type
+                  <span style="font-size: 10px; color: #566c7a;">(Chronic, Viral, Emergency...)</span>
+                </label>
+                <select id="new-disease-type" class="cell-select" required>
+                  <!-- Populated from clinical_data.js -->
+                </select>
+              </div>
+
+              <div class="grid-cell flex-1">
+                <label class="cell-label" for="new-med-select">
+                  Medication Formulary
+                  <span style="font-size: 10px; color: #566c7a;">(Common rural medicines)</span>
+                </label>
+                <select id="new-med-select" class="cell-select" onchange="if(this.value){ const cur = document.getElementById('new-prescription').value; document.getElementById('new-prescription').value = cur ? cur + '\n• ' + this.value : '• ' + this.value; }">
+                  <!-- Populated from clinical_data.js -->
+                </select>
+                <div id="new-med-chips" class="med-quick-chips"></div>
+              </div>
+            </div>
+
+            <!-- Row 3: Prescription & Description (Left) | QR Code (Right) -->
+            <div class="grid-row">
+              <div class="grid-cell flex-2">
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                  <div>
+                    <label class="cell-label" for="new-prescription">Prescription & Dosage Instructions</label>
+                    <textarea id="new-prescription" class="cell-textarea" placeholder="e.g. Paracetamol 500mg: 1 tab TID after food for 3 days&#10;ORS: 1L daily sip freely"></textarea>
+                  </div>
+                  <div>
+                    <label class="cell-label" for="new-description">Doctor Clinical Description / Symptoms</label>
+                    <textarea id="new-description" class="cell-textarea" placeholder="Symptoms, duration, temperature, BP, clinical observations..."></textarea>
+                  </div>
+                </div>
+              </div>
+
+              <!-- QR Code Panel (Matches Sketch 2) -->
+              <div class="grid-cell w-240 qr-preview-box">
+                <label class="cell-label">Assigned QR Code</label>
+                <div id="new-patient-qr-container" class="qr-code-canvas-box"></div>
+                <div id="new-patient-id-display" class="qr-patient-id-badge">EHR-PAT-XXXX</div>
+                <span style="font-size: 10px; color: #566c7a; text-align: center; margin-top: 4px;">
+                  Stores Patient Unique ID for offline scanning
+                </span>
+              </div>
+            </div>
+
+            <!-- Row 4: Voice Note Recording (Matches Sketch 2 Bottom) -->
+            <div class="grid-row">
+              <div class="grid-cell flex-1">
+                <label class="cell-label">Doctor Voice Note (Audio Clinical Record)</label>
+                <div class="voicenote-block">
+                  <button type="button" id="new-record-btn" class="voice-btn" onclick="window.ehrApp.toggleVoiceRecording('new')">
+                    🎙️ Record Voice Note
+                  </button>
+                  <button type="button" class="btn-classic" style="font-size: 12px; padding: 6px 12px;" onclick="window.ehrApp.addDemoVoiceNote('new')">
+                    🎵 Add Demo Audio Chime
+                  </button>
+                  <span id="new-audio-status" style="font-size: 12px; font-weight: 600; color: var(--sheet-blue-dark);">
+                    No voice note recorded
+                  </span>
+                  <div class="audio-preview-wrap">
+                    <audio id="new-audio-player" controls style="display: none;"></audio>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Bottom Actions -->
+          <div class="sheet-form-actions">
+            <button type="button" class="btn-classic" onclick="window.ehrApp.switchView('view-landing')">
+              ↩️ Back to Home
+            </button>
+            <div style="display: flex; gap: 10px;">
+              <button type="button" id="btn-print-slip" class="btn-classic">
+                🖨️ Print QR Health Slip
+              </button>
+              <button type="submit" class="btn-classic btn-save">
+                💾 Save Patient Record to Local Database
+              </button>
+            </div>
+          </div>
+        </form>
+
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- VIEW 3: SCAN QR CODE VIEW                  -->
+    <!-- ========================================== -->
+    <div id="view-scan-qr" class="view-panel">
+      <div class="scanner-container">
+        <h2 style="color: var(--sheet-blue-dark); margin-bottom: 8px;">📷 Scan Patient QR Code</h2>
+        <p style="font-size: 13px; color: #555;">Hold patient's printed QR card or health slip in front of the camera.</p>
+
+        <!-- Live Camera Stream Box -->
+        <div class="scanner-video-box">
+          <video id="qr-scanner-video" playsinline></video>
+          <canvas id="qr-scanner-canvas" style="display: none;"></canvas>
+          <div class="scanner-crosshair"></div>
+        </div>
+
+        <div id="qr-scan-status" style="font-size: 13px; font-weight: 600; color: var(--sheet-blue-dark); margin: 10px 0;">
+          Initializing camera...
+        </div>
+
+        <!-- Image Upload Fallback -->
+        <div style="border-top: 1px solid #cbdce8; padding-top: 15px; margin-top: 15px; text-align: left;">
+          <label style="font-weight: bold; font-size: 12px; display: block; margin-bottom: 5px;">
+            📁 Or Upload QR Image File from Device:
+          </label>
+          <input type="file" id="qr-file-upload" accept="image/*" class="cell-input">
+        </div>
+
+        <div style="margin-top: 15px; display: flex; justify-content: space-between;">
+          <button class="btn-classic" onclick="window.ehrApp.stopCameraScan(); window.ehrApp.switchView('view-landing');">
+            ↩️ Cancel
+          </button>
+          <button class="btn-classic" style="background: var(--sheet-blue-mid); color: #fff;" onclick="window.ehrApp.loadPatientRecord('EHR-VIL-4091')">
+            👤 Test with Demo Patient (Sunita Devi)
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- VIEW 4: PATIENT RECORD & MULTI-LOG VIEW    -->
+    <!-- ========================================== -->
+    <div id="view-patient-detail" class="view-panel">
+      <div style="width: 100%;">
+        
+        <!-- Patient Master Header -->
+        <div class="patient-master-summary">
+          <div class="patient-info-chunk">
+            <h3 id="detail-patient-name">Patient Name</h3>
+            <div id="detail-patient-meta" style="font-size: 13px; color: #444; margin-bottom: 6px;">
+              Age: -- | Gender: --
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <span class="badge-tag" style="background: var(--sheet-blue-mid); color: #fff; font-size: 13px;" id="detail-patient-id">
+                EHR-PAT-XXXX
+              </span>
+              <span class="badge-tag" style="background: #eaf2f8; color: var(--sheet-blue-dark);">OFFLINE VERIFIED</span>
+            </div>
+          </div>
+          <div id="detail-qr-box" style="width: 110px; height: 110px; background: #fff; border: 1px solid #cbdce8; padding: 4px; border-radius: 3px;"></div>
+        </div>
+
+        <!-- PAST CONSULTATION LOGS (User Requirement: do not delete, see both logs with date/time) -->
+        <div style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="color: var(--sheet-blue-dark); font-size: 16px; text-transform: uppercase; letter-spacing: 0.5px;">
+            📜 Consultation & Encounter Ledger (Immutable History)
+          </h3>
+          <span style="font-size: 12px; color: #566c7a;">
+            Chronological audit log: All previous visits preserved with audio
+          </span>
+        </div>
+
+        <!-- Logs Container where both/all logs are rendered -->
+        <div id="patient-logs-container" class="logs-timeline-container">
+          <!-- Dynamically populated by renderPatientLogs() -->
+        </div>
+
+        <!-- ADD NEW VISIT LOG (User Requirement: make changes, save as new log, dont delete previous) -->
+        <div class="ehr-form-sheet" style="margin-top: 25px;">
+          <div class="sheet-form-header">
+            <h2>➕ Record New Consultation / Follow-up Visit Log</h2>
+            <div id="followup-datetime" class="datetime-stamp-box">DATE: -- | TIME: --</div>
+          </div>
+
+          <form id="followup-form">
+            <div class="grid-form-container">
+              
+              <div class="grid-row">
+                <div class="grid-cell flex-1">
+                  <label class="cell-label" for="followup-disease-type">
+                    Updated / Current Disease Classification
+                  </label>
+                  <select id="followup-disease-type" class="cell-select">
+                    <!-- Populated from clinical_data.js -->
+                  </select>
+                </div>
+
+                <div class="grid-cell flex-1">
+                  <label class="cell-label" for="followup-med-select">
+                    Add Common Medicine
+                  </label>
+                  <select id="followup-med-select" class="cell-select" onchange="if(this.value){ const cur = document.getElementById('followup-prescription').value; document.getElementById('followup-prescription').value = cur ? cur + '\n• ' + this.value : '• ' + this.value; }">
+                    <!-- Populated from clinical_data.js -->
+                  </select>
+                  <div id="followup-med-chips" class="med-quick-chips"></div>
+                </div>
+              </div>
+
+              <div class="grid-row">
+                <div class="grid-cell flex-1">
+                  <label class="cell-label" for="followup-prescription">New Prescription & Dosage Instructions</label>
+                  <textarea id="followup-prescription" class="cell-textarea" placeholder="Enter updated medication schedule for this encounter..."></textarea>
+                </div>
+                <div class="grid-cell flex-1">
+                  <label class="cell-label" for="followup-description">Doctor Follow-up Notes / Progress Symptoms</label>
+                  <textarea id="followup-description" class="cell-textarea" placeholder="Response to previous treatment, recovery signs, revised diagnosis..."></textarea>
+                </div>
+              </div>
+
+              <!-- New Voice Note for this Encounter -->
+              <div class="grid-row">
+                <div class="grid-cell flex-1">
+                  <label class="cell-label">Record New Voice Note for This Visit</label>
+                  <div class="voicenote-block">
+                    <button type="button" id="followup-record-btn" class="voice-btn" onclick="window.ehrApp.toggleVoiceRecording('followup')">
+                      🎙️ Record Voice Note
+                    </button>
+                    <button type="button" class="btn-classic" style="font-size: 12px; padding: 6px 12px;" onclick="window.ehrApp.addDemoVoiceNote('followup')">
+                      🎵 Add Demo Audio Chime
+                    </button>
+                    <span id="followup-audio-status" style="font-size: 12px; font-weight: 600; color: var(--sheet-blue-dark);">
+                      No voice note recorded for this visit
+                    </span>
+                    <div class="audio-preview-wrap">
+                      <audio id="followup-audio-player" controls style="display: none;"></audio>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <div class="sheet-form-actions">
+              <button type="button" class="btn-classic" onclick="window.ehrApp.switchView('view-landing')">
+                ↩️ Back to Home
+              </button>
+              <button type="submit" class="btn-classic btn-save">
+                💾 Append New Visit Log (Preserve All Past Logs)
+              </button>
+            </div>
+          </form>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- VIEW 5: SPREADSHEET TABLE LEDGER           -->
+    <!-- ========================================== -->
+    <div id="view-spreadsheet" class="view-panel">
+      <div style="margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;">
+        <h2 style="font-size: 18px; color: var(--sheet-blue-dark); text-transform: uppercase;">
+          📊 Master Patient Spreadsheet Ledger
+        </h2>
+        <div style="font-size: 12px; color: #566c7a;">
+          Click any row to open patient's complete history & past voice notes.
+        </div>
+      </div>
+
+      <div class="spreadsheet-grid-wrapper">
+        <table class="spreadsheet-table">
+          <thead>
+            <tr>
+              <th class="col-header">#</th>
+              <th>A: Patient ID</th>
+              <th>B: Patient Name</th>
+              <th>C: Age</th>
+              <th>D: Gender</th>
+              <th>E: Disease Type</th>
+              <th>F: Active Prescription</th>
+              <th>G: Total Logs</th>
+              <th>H: Origin Node</th>
+            </tr>
+          </thead>
+          <tbody id="spreadsheet-body">
+            <!-- Dynamically populated by renderSpreadsheetTable() -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- VIEW 6: SYNC & CRDT MONITOR                -->
+    <!-- ========================================== -->
+    <div id="view-sync" class="view-panel">
+      <div style="width: 100%;">
+        
+        <!-- Clean Sync Control Panel -->
+        <div class="ehr-form-sheet" style="padding: 24px; margin-bottom: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <strong style="font-size: 16px; color: var(--sheet-blue-dark);">Delta Sync Execution</strong>
+              <div id="sync-progress-label" style="font-size: 13px; color: var(--sheet-blue-mid); margin-top: 4px;">
+                Ready to sync over active network connection.
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+              <button id="btn-interrupt-sync" class="btn-classic btn-danger" style="display: none;">
+                ⚡ Interrupt Sync Midway
+              </button>
+              <button id="btn-run-sync" class="btn-classic btn-save">
+                🚀 Run Delta Sync
+              </button>
+            </div>
+          </div>
+
+          <!-- Progress Bar -->
+          <div style="width: 100%; height: 12px; background: #e0ecf5; border-radius: 6px; overflow: hidden; margin-top: 10px;">
+            <div id="sync-progress-bar" style="width: 0%; height: 100%; background: var(--sheet-blue-mid); transition: width 0.3s ease;"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Explicit Conflict Resolution Modal (Unsafe Automatic Merges Must Surface Conflict) -->
+  <div id="conflict-modal" class="modal-overlay">
+    <div class="modal-content-card">
+      <div style="background: #b71c1c; color: #fff; padding: 12px 18px; font-weight: 800; font-size: 16px; display: flex; align-items: center; gap: 8px;">
+        ⚠️ Unsafe Automatic Merge Detected — Explicit Doctor Conflict Resolution
+      </div>
+      <div style="padding: 20px;">
+        <div id="conflict-diff-content"></div>
+
+        <div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px; display: flex; flex-direction: column; gap: 10px;">
+          <div style="font-weight: bold; font-size: 13px;">Choose Doctor Resolution Action:</div>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <button id="btn-conflict-local" class="btn-classic" style="background: var(--sheet-blue-mid); color: #fff; flex: 1;">
+              ✅ Retain Local Clinic Diagnosis
+            </button>
+            <button id="btn-conflict-remote" class="btn-classic" style="background: #1565c0; color: #fff; flex: 1;">
+              📥 Accept Incoming Remote Diagnosis
+            </button>
+            <button id="btn-conflict-merge" class="btn-classic" style="background: #6a1b9a; color: #fff; flex: 1;">
+              🔀 Combine Both Records (Union)
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

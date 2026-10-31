@@ -1,0 +1,841 @@
+/**
+ * Electronic Health Record — Spreadsheet Stylesheet
+ * Refined Pastel Blue Theme & Full-Screen Layout
+ */
+
+:root {
+  --sheet-blue-dark: #264b63;
+  --sheet-blue-mid: #4a7c9b;
+  --sheet-blue-light: #eaf2f8;
+  --sheet-header-bg: #4f86a8;
+  --sheet-border: #cadbe7;
+  --sheet-cell-bg: #ffffff;
+  --sheet-cell-alt: #f7fafc;
+  --sheet-text: #1c262c;
+  --sheet-text-muted: #566c7a;
+  --sheet-active-border: #4a7c9b;
+  --sheet-rowheader-bg: #e4eef5;
+  --sheet-warn-bg: #fff8e7;
+  --sheet-warn-border: #fae8be;
+  --sheet-warn-text: #856404;
+  --sheet-danger-bg: #fbebee;
+  --sheet-danger-text: #842029;
+  --font-system: -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, "Lucida Grande", sans-serif;
+  --font-mono: "Consolas", "Courier New", monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-system);
+  background-color: #eef4f8;
+  color: var(--sheet-text);
+  line-height: 1.4;
+  font-size: 14px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+}
+
+/* --- Full-Screen Window Container --- */
+.spreadsheet-window {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  background: #ffffff;
+  border: none;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.spreadsheet-titlebar {
+  background: var(--sheet-header-bg);
+  color: #ffffff;
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 2px solid var(--sheet-blue-dark);
+}
+
+.spreadsheet-titlebar h1 {
+  font-size: 18px;
+  letter-spacing: 0.8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.badge-tag {
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.22);
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.top-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.network-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+}
+
+.network-badge.online {
+  background: #d9ecf7;
+  color: #1e5272;
+}
+
+.network-badge.offline {
+  background: #ffcdd2;
+  color: #b71c1c;
+}
+
+/* --- Formula Bar --- */
+.formula-bar-container {
+  display: flex;
+  align-items: center;
+  background: #f0f5f9;
+  border-bottom: 1px solid var(--sheet-border);
+  padding: 5px 16px;
+  font-size: 12px;
+}
+
+.cell-name-box {
+  width: 105px;
+  background: #ffffff;
+  border: 1px solid #b8ccd8;
+  padding: 3px 8px;
+  font-family: var(--font-mono);
+  font-weight: bold;
+  text-align: center;
+  margin-right: 10px;
+  color: var(--sheet-blue-dark);
+}
+
+.formula-fx-label {
+  font-style: italic;
+  font-weight: bold;
+  color: #566c7a;
+  margin-right: 10px;
+  font-family: serif;
+}
+
+.formula-input {
+  flex: 1;
+  background: #ffffff;
+  border: 1px solid #b8ccd8;
+  padding: 4px 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #274557;
+}
+
+/* --- Navigation Tab Strip (Sheets) --- */
+.sheet-tabs-strip {
+  display: flex;
+  align-items: center;
+  background: #e2ecf3;
+  border-bottom: 1px solid var(--sheet-border);
+  padding: 0 16px;
+  gap: 4px;
+}
+
+.sheet-tab {
+  padding: 9px 22px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  background: #d4e3ee;
+  border: 1px solid var(--sheet-border);
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #284455;
+  transition: all 0.15s ease;
+}
+
+.sheet-tab:hover {
+  background: #eaf2f8;
+}
+
+.sheet-tab.active {
+  background: #ffffff;
+  color: var(--sheet-blue-dark);
+  border-top: 3px solid var(--sheet-blue-mid);
+  font-weight: 700;
+}
+
+.sheet-tab .badge {
+  background: #b71c1c;
+  color: #fff;
+  border-radius: 10px;
+  padding: 1px 6px;
+  font-size: 11px;
+}
+
+/* --- Full Screen Views Container --- */
+.view-panel {
+  display: none;
+  padding: 20px 30px;
+  min-height: calc(100vh - 120px);
+  background: #fbfdfd;
+  width: 100%;
+}
+
+.view-panel.active {
+  display: block;
+}
+
+/* --- Landing View (Sketch 1 Exact Representation) --- */
+.landing-canvas {
+  max-width: 720px;
+  margin: 40px auto;
+  border: 2px solid var(--sheet-blue-mid);
+  background: #ffffff;
+  box-shadow: 0 4px 16px rgba(44, 81, 104, 0.08);
+  padding: 35px 45px;
+  text-align: center;
+  border-radius: 4px;
+}
+
+.landing-header-banner {
+  border-bottom: 2px solid var(--sheet-blue-mid);
+  padding-bottom: 15px;
+  margin-bottom: 25px;
+}
+
+.landing-header-banner h2 {
+  font-size: 25px;
+  color: var(--sheet-blue-dark);
+  letter-spacing: 1.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  font-family: var(--font-system);
+}
+
+.landing-header-banner p {
+  color: var(--sheet-text-muted);
+  font-size: 13px;
+  margin-top: 5px;
+}
+
+.sketch-action-box {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  align-items: center;
+  margin: 25px 0;
+}
+
+.sketch-btn {
+  width: 100%;
+  max-width: 480px;
+  padding: 22px 20px;
+  font-size: 19px;
+  font-weight: 700;
+  border: 2px solid var(--sheet-blue-mid);
+  background: #ffffff;
+  color: var(--sheet-blue-dark);
+  cursor: pointer;
+  border-radius: 4px;
+  box-shadow: 3px 3px 0px rgba(74, 124, 155, 0.5);
+  transition: all 0.12s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.sketch-btn:hover {
+  background: var(--sheet-blue-light);
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0px rgba(74, 124, 155, 0.7);
+}
+
+.sketch-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0px rgba(74, 124, 155, 0.7);
+}
+
+.sketch-btn .sub-lbl {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sheet-text-muted);
+}
+
+.sketch-btn.primary {
+  background: var(--sheet-header-bg);
+  color: #ffffff;
+  border-color: var(--sheet-blue-dark);
+}
+
+.sketch-btn.primary:hover {
+  background: #3e7292;
+}
+
+.sketch-or-divider {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--sheet-text-muted);
+  font-style: italic;
+  position: relative;
+  width: 200px;
+  margin: 0 auto;
+}
+
+.sketch-or-divider::before,
+.sketch-or-divider::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 60px;
+  height: 1px;
+  background: #cbdce8;
+}
+
+.sketch-or-divider::before { left: 0; }
+.sketch-or-divider::after { right: 0; }
+
+.quick-search-box {
+  margin-top: 25px;
+  background: #f2f7fb;
+  border: 1px solid var(--sheet-border);
+  padding: 14px 18px;
+  border-radius: 4px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.quick-search-box input {
+  flex: 1;
+  padding: 9px 12px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  border: 1px solid #b8ccd8;
+  border-radius: 3px;
+}
+
+/* --- Full Screen Form View (Sketch 2 Exact Representation) --- */
+.ehr-form-sheet {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  border: 1px solid var(--sheet-border);
+  background: #ffffff;
+  box-shadow: 0 2px 10px rgba(44, 81, 104, 0.05);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.sheet-form-header {
+  background: #f2f7fb;
+  border-bottom: 2px solid var(--sheet-blue-mid);
+  padding: 14px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sheet-form-header h2 {
+  font-size: 21px;
+  font-weight: 800;
+  color: var(--sheet-blue-dark);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.datetime-stamp-box {
+  background: #ffffff;
+  border: 1px solid var(--sheet-border);
+  padding: 6px 14px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sheet-blue-dark);
+  border-radius: 3px;
+}
+
+/* Spreadsheet Grid Form Cells */
+.grid-form-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.grid-row {
+  display: flex;
+  border-bottom: 1px solid var(--sheet-border);
+}
+
+.grid-cell {
+  padding: 14px 20px;
+  border-right: 1px solid var(--sheet-border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: #ffffff;
+}
+
+.grid-cell:last-child {
+  border-right: none;
+}
+
+.grid-cell.flex-1 { flex: 1; }
+.grid-cell.flex-2 { flex: 2; }
+.grid-cell.flex-3 { flex: 3; }
+.grid-cell.w-180 { width: 220px; flex-shrink: 0; }
+.grid-cell.w-240 { width: 280px; flex-shrink: 0; }
+
+.cell-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--sheet-blue-dark);
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cell-input, .cell-select, .cell-textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #b8ccd8;
+  border-radius: 3px;
+  font-size: 14px;
+  font-family: inherit;
+  background: #fafcff;
+  color: #111;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cell-input:focus, .cell-select:focus, .cell-textarea:focus {
+  outline: none;
+  border-color: var(--sheet-active-border);
+  background: #ffffff;
+  box-shadow: 0 0 0 2px rgba(74, 124, 155, 0.25);
+}
+
+.cell-textarea {
+  resize: vertical;
+  min-height: 80px;
+  line-height: 1.4;
+}
+
+/* Medication Selection & Presets */
+.med-quick-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.med-chip {
+  background: #edf5fa;
+  border: 1px solid #bcd4e5;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  color: #264b63;
+  transition: all 0.12s ease;
+}
+
+.med-chip:hover {
+  background: #dbebf5;
+  border-color: #8fb8d4;
+}
+
+/* QR Code Box */
+.qr-preview-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  background: #fbfdff;
+}
+
+.qr-code-canvas-box {
+  width: 170px;
+  height: 170px;
+  border: 1px solid #cbdce8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  padding: 6px;
+  border-radius: 3px;
+}
+
+.qr-patient-id-badge {
+  font-family: var(--font-mono);
+  font-weight: 800;
+  font-size: 13px;
+  background: #eaf2f8;
+  border: 1px solid #bcd4e5;
+  padding: 4px 10px;
+  margin-top: 8px;
+  color: var(--sheet-blue-dark);
+  border-radius: 3px;
+}
+
+/* Voice Note Component */
+.voicenote-block {
+  background: #f2f7fb;
+  border: 1px solid #cbdce8;
+  padding: 14px 20px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.voice-btn {
+  padding: 9px 18px;
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px solid var(--sheet-blue-dark);
+  background: var(--sheet-blue-mid);
+  color: #ffffff;
+  border-radius: 3px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.12s ease;
+}
+
+.voice-btn.recording {
+  background: #c62828;
+  border-color: #8e0000;
+  animation: pulse-red 1s infinite alternate;
+}
+
+@keyframes pulse-red {
+  0% { box-shadow: 0 0 2px #d32f2f; }
+  100% { box-shadow: 0 0 10px #d32f2f; }
+}
+
+.voice-btn:hover {
+  background: #3e6d8a;
+}
+
+.audio-preview-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.audio-preview-wrap audio {
+  height: 36px;
+  flex: 1;
+}
+
+/* Form Action Buttons Bar */
+.sheet-form-actions {
+  background: #edf4f9;
+  padding: 16px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--sheet-border);
+}
+
+.btn-classic {
+  padding: 10px 22px;
+  font-size: 14px;
+  font-weight: 700;
+  border: 1px solid #b8ccd8;
+  background: #e6eef5;
+  color: #1e3a4c;
+  cursor: pointer;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.12s ease;
+}
+
+.btn-classic:hover {
+  background: #d8e5f0;
+}
+
+.btn-classic.btn-save {
+  background: var(--sheet-header-bg);
+  border-color: var(--sheet-blue-dark);
+  color: #ffffff;
+}
+
+.btn-classic.btn-save:hover {
+  background: #3e7292;
+}
+
+.btn-classic.btn-danger {
+  background: #c62828;
+  border-color: #8e0000;
+  color: #ffffff;
+}
+
+/* --- QR Scanner Modal & Live View --- */
+.scanner-container {
+  max-width: 550px;
+  margin: 30px auto;
+  border: 2px solid var(--sheet-blue-mid);
+  background: #fff;
+  padding: 24px;
+  text-align: center;
+  box-shadow: 0 4px 16px rgba(44, 81, 104, 0.1);
+  border-radius: 4px;
+}
+
+.scanner-video-box {
+  width: 100%;
+  max-width: 440px;
+  height: 300px;
+  background: #000;
+  margin: 15px auto;
+  position: relative;
+  overflow: hidden;
+  border: 2px solid var(--sheet-blue-mid);
+}
+
+.scanner-video-box video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.scanner-crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 190px;
+  height: 190px;
+  border: 2px solid #5ab2ea;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+/* --- Patient Record & Multiple Logs View (Full Screen) --- */
+.patient-master-summary {
+  background: #f2f7fb;
+  border: 1px solid var(--sheet-border);
+  padding: 18px 24px;
+  margin-bottom: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-radius: 4px;
+}
+
+.patient-info-chunk h3 {
+  font-size: 22px;
+  color: var(--sheet-blue-dark);
+  margin-bottom: 5px;
+}
+
+.logs-timeline-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 28px;
+  width: 100%;
+}
+
+.log-entry-card {
+  border: 1px solid var(--sheet-border);
+  background: #ffffff;
+  border-left: 5px solid var(--sheet-blue-mid);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.log-entry-card.previous {
+  border-left-color: #7b96a8;
+  background: #fafcfe;
+}
+
+.log-entry-card.latest {
+  border-left-color: var(--sheet-blue-dark);
+}
+
+.log-entry-header {
+  background: #edf4f9;
+  padding: 10px 18px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  border-bottom: 1px solid #dbe6ef;
+}
+
+.log-entry-body {
+  padding: 14px 20px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.log-data-item strong {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--sheet-blue-dark);
+  margin-bottom: 3px;
+}
+
+/* --- Full Screen Spreadsheet Table View --- */
+.spreadsheet-grid-wrapper {
+  overflow-x: auto;
+  border: 1px solid var(--sheet-border);
+  background: #fff;
+  width: 100%;
+  border-radius: 3px;
+}
+
+.spreadsheet-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.spreadsheet-table th,
+.spreadsheet-table td {
+  border: 1px solid #d5e3ed;
+  padding: 8px 14px;
+  text-align: left;
+}
+
+.spreadsheet-table th {
+  background: #e4eef6;
+  color: var(--sheet-blue-dark);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.spreadsheet-table th.col-header {
+  background: #d8e6f1;
+  text-align: center;
+  width: 45px;
+}
+
+.spreadsheet-table tr:hover td {
+  background: #f1f7fb;
+  cursor: pointer;
+}
+
+.spreadsheet-table tr.active td {
+  background: #e2eff8;
+  border-top: 1px solid var(--sheet-blue-mid);
+  border-bottom: 1px solid var(--sheet-blue-mid);
+}
+
+/* --- Explicit Conflict Resolution Banner & Modal --- */
+.conflict-alert-banner {
+  background: #ffebee;
+  border: 2px solid #ef5350;
+  padding: 12px 16px;
+  margin-bottom: 15px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.conflict-diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 15px 0;
+  font-size: 13px;
+}
+
+.conflict-diff-table th, .conflict-diff-table td {
+  border: 1px solid #ccc;
+  padding: 8px 12px;
+}
+
+.conflict-diff-table th {
+  background: #f0f0f0;
+}
+
+.diff-local { background: #eaf2f8; }
+.diff-remote { background: #ffebee; }
+
+/* Modal base */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.65);
+  z-index: 9999;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modal-overlay.open {
+  display: flex;
+}
+
+.modal-content-card {
+  background: #fff;
+  max-width: 680px;
+  width: 100%;
+  border: 2px solid var(--sheet-blue-dark);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .grid-row {
+    flex-direction: column;
+  }
+  .grid-cell {
+    border-right: none;
+    border-bottom: 1px solid var(--sheet-border);
+  }
+  .grid-cell.w-180, .grid-cell.w-240 {
+    width: 100%;
+  }
+  .log-entry-body {
+    grid-template-columns: 1fr;
+  }
+}
