@@ -164,9 +164,10 @@ Patients, visit logs and voice notes registered on any device show up on every o
 ### One-time setup
 1. **Database** – Vercel dashboard → your project → **Storage** → **Create Database** → **Neon (Postgres)** → connect it to the project.
    This adds `DATABASE_URL` automatically. (The tables are created on first use.)
-2. **Clinic key** – Project → **Settings → Environment Variables** → add `CLINIC_SYNC_KEY` = a long secret (e.g. 20+ random characters). Apply to Production.
+2. **Clinic key (optional)** – By default the hub is **open**: any device that opens the site syncs automatically, no key needed (fine for demos with fake data).
+   To lock it down, add `CLINIC_SYNC_KEY` = a long secret under **Settings → Environment Variables**, then enter the same key on each device (or use **Set Up Another Device**).
 3. **Redeploy** (Deployments → ⋯ → Redeploy) so the variables take effect.
-4. On **each device**: open the site → **Sync & CRDT Monitor** tab → enter the same Clinic Sync Key and a unique Device Name (e.g. `VAN-02`) → **Save & Connect**. The status line should turn green.
+4. Open the site on each device. Syncing starts by itself; the **Sync & CRDT Monitor** tab shows a green status. Optionally give each device a name (e.g. `VAN-02`) there.
 
 ### How merging works
 - Visit logs and voice notes are append-only → merged by set union, never lost.

@@ -487,8 +487,8 @@
           </p>
           <div style="display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end;">
             <div style="flex: 1; min-width: 220px;">
-              <label class="cell-label" for="sync-clinic-key">Clinic Sync Key</label>
-              <input type="password" id="sync-clinic-key" class="cell-input" placeholder="Same key on every device" autocomplete="off">
+              <label class="cell-label" for="sync-clinic-key">Clinic Sync Key <span style="font-weight:400; text-transform:none; color:#566c7a;">(optional, only if the hub has one)</span></label>
+              <input type="password" id="sync-clinic-key" class="cell-input"  placeholder="Leave empty unless the hub requires a key" autocomplete="off">
             </div>
             <div style="width: 220px;">
               <label class="cell-label" for="sync-node-id">This Device Name</label>
@@ -498,6 +498,24 @@
             <button id="btn-test-connection" class="btn-classic">🔌 Test Connection</button>
           </div>
           <div id="cloud-status" style="margin-top: 12px; font-size: 13px; font-weight: 600; color: var(--sheet-blue-dark);">Checking cloud hub...</div>
+
+          <!-- One-tap setup for other devices -->
+          <div style="margin-top: 16px; border-top: 1px solid #dbe6ef; padding-top: 14px;">
+            <button id="btn-share-setup" class="btn-classic">📲 Set Up Another Device (link / QR)</button>
+            <div id="setup-share-box" style="display: none; margin-top: 12px;">
+              <p style="font-size: 12px; color: #b71c1c; margin-bottom: 8px;">
+                ⚠️ This link contains the clinic key. Share it only with clinic staff (not in public chats or posts).
+              </p>
+              <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
+                <div id="setup-qr-box" style="width: 200px; height: 200px; background: #fff; border: 1px solid #cbdce8; padding: 4px;"></div>
+                <div style="flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 8px;">
+                  <input type="text" id="setup-link-input" class="cell-input" readonly>
+                  <button id="btn-copy-setup" class="btn-classic" style="align-self: flex-start;">📋 Copy Link</button>
+                  <span style="font-size: 12px; color: #566c7a;">Open this link (or scan the QR) on the new device. It saves the key automatically; no typing needed.</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
       </div>
